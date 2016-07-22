@@ -1,0 +1,32 @@
+﻿<template>
+    <section>
+        <div class="container-fluid">
+            <h2>Application Managers</h2>
+
+            <div style="max-width: 800px;">
+                <table class="table table-striped table-hover">
+                    <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Login Name</th>
+                        <th>Enabled</th>
+                        <th style="width: 1px;"></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr repeat.for="manager of applicationManagers">
+                        <td>${manager.name}</td>
+                        <td>${manager.loginName}</td>
+                        <td>${manager.isActive}</td>
+                        <td>
+                            <compose view="../resources/buttons/edit-button.html" click.delegate="open(manager.id)"></compose>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+
+                <compose view="../resources/buttons/new-button.html"></compose>
+            </div>
+        </div>
+    </section>
+</template>

@@ -1,0 +1,28 @@
+﻿<template>
+    <section>
+        <div class="container-fluid">
+            <form submit.delegate="save()" novalidate="novalidate" role="form" class="form-horizontal">
+
+                <compose view="../resources/entity-header.html"></compose>
+
+                <div class="form-group">
+                    <label class="control-label col-sm-1" for="name">Name:</label>
+                    <div class="col-sm-3">
+                        <input type="text" class="form-control" id="name" value.bind="entity.name" placeholder="Name of the application"/>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="control-label col-sm-1" for="identifier">Identifier:</label>
+                    <div class="col-sm-3">
+                        <input type="text" readonly.bind="isExisting" class="form-control" id="identifier" value.bind="entity.applicationIdentifier" placeholder="Generated if empty"/>
+                    </div>
+                </div>
+
+                <div class="col-sm-4">
+                    <h3>Managers of application</h3>
+                    <compose model.bind="entity.applicationApplicationManagers" view-model="./application-managers"></compose>
+                </div>
+            </form>
+        </div>
+    </section>
+</template>

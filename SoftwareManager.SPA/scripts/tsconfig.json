@@ -1,0 +1,20 @@
+﻿{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "target": "es5",
+    "module": "system",
+    "moduleResolution": "node",
+    "outDir": "../wwwroot/",
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "removeComments": false,
+    "noImplicitAny": false,
+    "noEmitOnError": false,
+    "watch" :  false
+  },
+  "exclude": [
+    "wwwroot/jspm_packages",
+    "typings"
+  ]
+}

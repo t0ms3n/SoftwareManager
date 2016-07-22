@@ -1,0 +1,22 @@
+﻿<template>
+    <div tabindex="-1" role="dialog" style="max-width: 300px;">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" click.trigger="controller.cancel()" class="close" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title">${title}</h4>
+                </div>
+                <div class="modal-body">
+                    <select value.bind="result.selectedItem">
+                        <option value="-1">Please select an item</option>
+                        <option repeat.for="item of items" model.bind="item">${item.name}</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" click.delegate="controller.cancel()">No</button>
+                    <button type="button" class="btn btn-success" click.delegate="controller.ok(result)">Yes</button>
+                </div>
+            </div><!-- /.modal-content  -->
+        </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
+</template>

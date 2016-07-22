@@ -1,0 +1,23 @@
+﻿<template>
+    <require from="../resources/buttons/delete-button"></require>
+    <require from="../resources/buttons/lookup-selection-button"></require>
+    <table class="table table-striped table-hover">
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Login</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr repeat.for="manager of entities"  show.bind="!manager.shouldBeDeleted">
+            <td>${manager.managerName}</td>
+            <td>${manager.managerLoginName}</td>
+            <td>
+                <delete-button if.bind="!manager.shouldBeAddded" msg="Are you sure you want to delete ${manager.managerName}" action.call="$parent.deleteManager(manager)"></delete-button>   
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <compose view="../resources/buttons/add-button.html" click.delegate="addManager()"></compose>
+</template>
