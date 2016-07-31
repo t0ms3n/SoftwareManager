@@ -6,15 +6,15 @@ Feel free to report issues and suggest improvements.
 
 #Feature/Technology overview
 The sample currently provides the following features
-1. OData API using WebApi 2
- - Entity Framework 6.1.3
- - does communicate with its own models (using AutoMapper, Projection and extraction of navigation properties from the query options)
- - Batchsupport
- - Modelvalidation using FluentValidation
-2. Single Page Application
- - built with Aurelia 1.0.0-rc.1.0.1
- - Typescript
- - Bootstrap
+- OData API using WebApi 2
+ + Entity Framework 6.1.3
+ + does communicate with its own models (using AutoMapper, Projection and extraction of navigation properties from the query options)
+ + Batchsupport
+ + Modelvalidation using FluentValidation
+- Single Page Application
+ + built with Aurelia 1.0.0-rc.1.0.1
+ + Typescript
+ + Bootstrap
 
 #Setup the database
 1. To create the initial database you can use the SoftwareManager.DbMigrations
