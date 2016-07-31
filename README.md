@@ -4,7 +4,7 @@ Sample N-tier project using WebApi2 + OData + EF 6 + Aurelia with Visual Studio
 This project is still work in progress. The goal is to create a sample which per example goes furhter than just creating a basic OData WebApi which do not use DbContext directly.
 Feel free to report issues and suggest improvements.
 
-#Feature/Technology overview
+#Overview
 The sample currently provides the following features
 - OData API using WebApi 2
  + Entity Framework 6.1.3
@@ -28,7 +28,7 @@ To run the app locally, follow these steps:
   2. Ensure ASP.NET Core is installed.
   3. Restore required Nuget packages
   4. In the SoftwareManager.SPA project folder, exeucte the following commands:
-  
+   
     ```shell
     npm install
     ```
