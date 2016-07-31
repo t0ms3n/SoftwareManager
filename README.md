@@ -4,7 +4,7 @@ Sample N-tier project using WebApi2 + OData + EF 6 + Aurelia with Visual Studio
 This project is still work in progress. The goal is to create a sample which per example goes furhter than just creating a basic OData WebApi which do not use DbContext directly.
 Feel free to report issues and suggest improvements.
 
-#Feature/Technology overview
+#Overview
 The sample currently provides the following features
 - OData API using WebApi 2
  + Entity Framework 6.1.3
