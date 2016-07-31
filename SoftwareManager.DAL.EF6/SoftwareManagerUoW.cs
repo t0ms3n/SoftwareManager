@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
 using System.Data.Entity;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using SoftwareManager.Entities;
+using SoftwareManager.DAL.Contracts;
+using SoftwareManager.DAL.Contracts.Models;
+using SoftwareManager.DAL.Contracts.Repositories;
 using SoftwareManager.DAL.EF6.Models;
 using SoftwareManager.DAL.EF6.Repositories;
 
@@ -15,7 +19,12 @@ namespace SoftwareManager.DAL.EF6
     {
         private readonly ISoftwareManagerContext _context;
 
-        public DbContextTransaction Transaction { get; private set; }
+        private DbContextTransaction _internalTransaction;
+
+        public IDbTransaction Transaction
+        {
+            get {  return _internalTransaction?.UnderlyingTransaction; }
+        }
         public IGenericRepository<Application> ApplicationRepository { get; set; }
         public IGenericRepository<ApplicationApplicationManager> ApplicationApplicationManagerRepository { get; set; }
         public IGenericRepository<ApplicationManager> ApplicationManagerRepository { get; set; }
@@ -30,9 +39,9 @@ namespace SoftwareManager.DAL.EF6
             ApplicationVersionRepository = new TrackedGenericRepository<ApplicationVersion>(_context);
         }
 
-        public DbContextTransaction Begin()
+        public IDbTransaction Begin()
         {
-            Transaction = _context.BeginTransaction();
+            _internalTransaction = _context.BeginTransaction();
             return Transaction;
         }
 
@@ -54,7 +63,7 @@ namespace SoftwareManager.DAL.EF6
             Transaction.Rollback();
         }
 
-        public async Task<DbSaveResult> SaveAsync()
+        public async Task<IDbSaveResult> SaveAsync()
         {
             var result = await _context.SaveChangesAsync(CancellationToken.None);
             return new DbSaveResult()

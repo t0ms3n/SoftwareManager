@@ -4,7 +4,7 @@ using System.Data.Entity;
 using System.Data.Entity.Infrastructure;
 using System.Threading;
 using System.Threading.Tasks;
-using SoftwareManager.Entities;
+using SoftwareManager.DAL.Contracts.Models;
 
 
 namespace SoftwareManager.DAL.EF6

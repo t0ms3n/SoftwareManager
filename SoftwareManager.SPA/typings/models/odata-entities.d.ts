@@ -2,7 +2,7 @@
 
     export interface IApplicationEntity extends IDateTrackedEntity {
         name: string;
-        applicationIdentifier: any;
+        identifier: any;
         applicationApplicationManagers: IApplicationApplicationManagerEntity[];
         applicationVersions: IApplicationVersionEntity[];
     }

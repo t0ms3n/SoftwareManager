@@ -6,7 +6,7 @@
 
     constructor(type: string) {
         this.id = 0;
-        this["@odata.type"] = "SoftwareManager.Entities." + type;
+        this["@odata.type"] = "SoftwareManager.BLL.Contracts.Models." + type;
     }
 }
 

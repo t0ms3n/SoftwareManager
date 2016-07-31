@@ -16,7 +16,7 @@ namespace SoftwareManager.Common.DependencyInjection
             switch (lifetime)
             {
                 case ServiceLifetime.Scoped:
-                    _container.RegisterType<TFrom, TTo>(new HierarchicalLifetimeManager());
+                    _container.RegisterType<TFrom, TTo>(new HttpContextLifetimeManager());
                     break;
                 case ServiceLifetime.Singleton:
                     _container.RegisterType<TFrom, TTo>(new ContainerControlledLifetimeManager());

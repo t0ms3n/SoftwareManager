@@ -1,4 +1,4 @@
-using SoftwareManager.Entities;
+using SoftwareManager.DAL.Contracts.Models;
 
 namespace SoftwareManager.DAL.EF6.Configurations
 {

@@ -1,177 +1,175 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data.Entity;
+using System;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
-using SoftwareManager.BLL.Exceptions;
 using AutoMapper;
-using SoftwareManager.DAL.EF6;
-using SoftwareManager.Entities;
+using FluentValidation;
+using SoftwareManager.BLL.Contracts.Models;
+using SoftwareManager.BLL.Contracts.Services;
+using SoftwareManager.BLL.Exceptions;
+using SoftwareManager.BLL.Extensions;
+using SoftwareManager.BLL.Validators;
+using SoftwareManager.DAL.Contracts;
+using DataModels = SoftwareManager.DAL.Contracts.Models;
+
 
 namespace SoftwareManager.BLL.Services
 {
     public class ApplicationService : ServiceBase, IApplicationService
     {
-        private readonly ISoftwareManagerUoW _softwareUpdateManagerUoW;
-        private readonly IIdentityService _identityService;
+        private readonly IValidator<Application> _applicationValidator;
 
-        public ApplicationService(ISoftwareManagerUoW softwareUpdateManagerUoW, IIdentityService identityService) : base(identityService)
+        public ApplicationService(ISoftwareManagerUoW softwareManagerUoW, IIdentityService identityService, IValidator<Application> applicationValidator) : base(identityService, softwareManagerUoW)
         {
-            _softwareUpdateManagerUoW = softwareUpdateManagerUoW;
-            _identityService = identityService;
+            _applicationValidator = applicationValidator;
         }
 
-        public IQueryable<Application> FindApplications(params string[] expand)
+        public IQueryable<Application> FindApplications(params string[] membersToExpand)
         {
-            if (_identityService.IsAuthenticated)
-            {
-                if (_identityService.IsAdmin)
-                    return _softwareUpdateManagerUoW.ApplicationRepository.FindAll();
-
-                return _softwareUpdateManagerUoW.ApplicationRepository.FindAll().Where(w => w.ApplicationApplicationManagers.Any(a => a.ApplicationManagerId == _identityService.CurrentUser.Id));
-            }
-
-            return new List<Application>().AsQueryable();
+            var resultQuery = SoftwareManagerUoW.ApplicationRepository.FindAll();
+            return ProjectQuery<Application, DataModels.Application>(membersToExpand, resultQuery);
         }
 
-        public IQueryable<Application> FindApplication(int id)
+        public IQueryable<Application> FindApplications(Expression<Func<Application, bool>> query, params string[] membersToExpand)
         {
-            if (_identityService.IsAuthenticated)
-            {
-                if (_identityService.IsAdmin)
-                    return _softwareUpdateManagerUoW.ApplicationRepository.FindById(id);
+            return FindApplications(membersToExpand).Where(query);
+        }
 
-                return _softwareUpdateManagerUoW.ApplicationRepository.FindAll().Where(w => w.Id == id &&  w.ApplicationApplicationManagers.Any(a => a.ApplicationManagerId == _identityService.CurrentUser.Id));
-            }
+        public IQueryable<Application> FindApplication(params string[] membersToExpand)
+        {
+            var resultQuery = SoftwareManagerUoW.ApplicationRepository.FindOne();
+            return ProjectQuery<Application, DataModels.Application>(membersToExpand, resultQuery);
+        }
 
-            return new List<Application>().AsQueryable();
+        public IQueryable<Application> FindApplication(Expression<Func<Application, bool>> query, params string[] membersToExpand)
+        {
+            return FindApplications(membersToExpand: membersToExpand).Where(query).Take(1);
         }
 
         public async Task<Application> GetApplicationAsync(int id)
         {
-            var application = await _softwareUpdateManagerUoW.ApplicationRepository.GetAsync(id);
+            var application = await SoftwareManagerUoW.ApplicationRepository.FirstOrDefaultAsync(f => f.Id == id,
+                e => e.ApplicationApplicationManagers
+                , e => e.ApplicationApplicationManagers.Select(e2 => e2.ApplicationManager)
+                , e => e.ApplicationVersions);
+
             return Mapper.Map<Application>(application);
         }
 
         public async Task CreateApplication(Application application)
         {
-            // Entity erstellen
-            application.CreateById = _identityService.CurrentUser.Id;
-
-            if (application.ApplicationIdentifier == Guid.Empty)
+            if(application.Identifier == default(Guid))
             {
-                application.ApplicationIdentifier = Guid.NewGuid();
+                application.Identifier = Guid.NewGuid();
             }
 
-            using (_softwareUpdateManagerUoW.Begin())
+            var validationResult = await _applicationValidator.ValidateAsync(new ValidationContext<Application>(application));
+            if (!validationResult.IsValid)
             {
-                // Erstellung durchführen
-                _softwareUpdateManagerUoW.ApplicationRepository.Add(application);
-
-                // Ersteller als Manager der Software hinzufügen
-                _softwareUpdateManagerUoW.ApplicationApplicationManagerRepository.Add(
-                    new ApplicationApplicationManager()
-                    {
-                        Application = application,
-                        CreateById = _identityService.CurrentUser.Id,
-                        ApplicationManagerId = _identityService.CurrentUser.Id
-                    });
-
-                await _softwareUpdateManagerUoW.SaveAsync();
-
-                _softwareUpdateManagerUoW.Commit();
+                throw new ModelValidationException("Model is invalid", validationResult.ExtractModelErrors());
             }
+
+            var internalApplication = Mapper.Map<DataModels.Application>(application);
+
+            await CreateOrUseTransaction(async () =>
+            {
+                internalApplication.CreateById = IdentityService.CurrentUser.Id;
+                SoftwareManagerUoW.ApplicationRepository.Add(internalApplication);
+                await SoftwareManagerUoW.SaveAsync();
+            });
+
+            Mapper.Map(internalApplication, application);
         }
 
         public async Task<Application> UpdateApplication(int key, Application application)
         {
-            // Applikation abrufen und prüfen ob gefunden
-            var currentApplication = await _softwareUpdateManagerUoW.ApplicationRepository.GetAsync(key);
+            var validationResult = await _applicationValidator.ValidateAsync(new ValidationContext<Application>(application));
+            if (!validationResult.IsValid)
+            {
+                throw new ModelValidationException("Model is invalid", validationResult.ExtractModelErrors());
+            }
+
+            //ToDo: Check if User is responsible for application
+
+
+            // Get application to update
+            var currentApplication = await SoftwareManagerUoW.ApplicationRepository.GetAsync(key);
 
             if (currentApplication == null)
-                throw new EntityNotFoundException($"Application with id {key} not found");
+                throw new ItemNotFoundException($"Application with id {key} not found");
 
-            // Id des UpdateItems überschreiben und Werte auf aktuelles Item übertragen
             application.Id = currentApplication.Id;
-
+            //Map new values
             Mapper.Map(application, currentApplication);
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                currentApplication.ModifyById = _identityService.CurrentUser.Id;
-                // Aktualisierung durchführen
-                _softwareUpdateManagerUoW.ApplicationRepository.Update(currentApplication);
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
+                currentApplication.ModifyById = IdentityService.CurrentUser.Id;
+                SoftwareManagerUoW.ApplicationRepository.Update(currentApplication);
+                await SoftwareManagerUoW.SaveAsync();
+            });
 
-            return currentApplication;
+            var updateApplication = Mapper.Map<Application>(currentApplication);
+            return updateApplication;
         }
 
-        /// <summary>
-        /// Löscht die Application
-        /// </summary>
-        /// <param name="key"></param>
-        /// <returns></returns>
         public async Task DeleteApplication(int key)
         {
-            // Applikation abrufen und prüfen ob gefunden
-            var currentApplication = await _softwareUpdateManagerUoW.ApplicationRepository.GetAsync(key);
+            //Check if User is responsible for application
+            IdentityService.CheckAdminRole();
+
+            var currentApplication = await SoftwareManagerUoW.ApplicationRepository.GetAsync(key);
 
             if (currentApplication == null)
-                throw new EntityNotFoundException($"Application with id {key} not found");
+                throw new ItemNotFoundException($"Application with id {key} not found");
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                // Löschen durchführen
-                _softwareUpdateManagerUoW.ApplicationRepository.Remove(currentApplication);
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
+                SoftwareManagerUoW.ApplicationRepository.Remove(currentApplication);
+                await SoftwareManagerUoW.SaveAsync();
+            });
         }
 
         /// <summary>
-        /// Erstellt eine neue Verbindung zwischen Application und ApplicationManager
+        /// Creates a new association between the application and the application manager
         /// </summary>
         /// <param name="applicationId"></param>
         /// <param name="applicationManagerId"></param>
         /// <returns></returns>
         public async Task CreateApplicationManagerAssociation(int applicationId, int applicationManagerId)
         {
-            // Applikation abrufen und prüfen ob gefunden
-            var currentApplication =
-                await _softwareUpdateManagerUoW.ApplicationRepository.FindById(applicationId)
-                    .Include(w => w.ApplicationApplicationManagers).FirstOrDefaultAsync();
-
+            // get application and check if found
+            var currentApplication = await SoftwareManagerUoW.ApplicationRepository
+                                         .FirstOrDefaultAsync(f => f.Id == applicationId, w => w.ApplicationApplicationManagers);
             if (currentApplication == null)
-                throw new EntityNotFoundException();
+                throw new ItemNotFoundException();
 
-            // Ist der ApplicationManager bereits der Applikation zugewiesen?
+            // check if manager is already association with the application
             if (currentApplication.ApplicationApplicationManagers.Any(a => a.ApplicationManagerId == applicationManagerId))
                 throw new BadRequestException();
 
 
-            // Prüfen ob der ApplicationManager existiert
-            var doesManagerExist = await _softwareUpdateManagerUoW.ApplicationManagerRepository.AnyAsync(a => a.Id == applicationManagerId);
+            // get and check if manager exists
+            var doesManagerExist = await SoftwareManagerUoW.ApplicationManagerRepository.AnyAsync(a => a.Id == applicationManagerId);
             if (!doesManagerExist)
-                throw new EntityNotFoundException();
+                throw new ItemNotFoundException();
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                // Verbindung zwischen Manager und Applikation erstellen und speichern
-                _softwareUpdateManagerUoW.ApplicationApplicationManagerRepository.Add(new ApplicationApplicationManager()
+                // create association between manager and application
+                SoftwareManagerUoW.ApplicationApplicationManagerRepository.Add(new DataModels.
+                    ApplicationApplicationManager()
                 {
                     ApplicationId = applicationId,
                     ApplicationManagerId = applicationManagerId,
-                    CreateById = _identityService.CurrentUser.Id
+                    CreateById = IdentityService.CurrentUser.Id
                 });
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
+                await SoftwareManagerUoW.SaveAsync();
+            });
         }
 
         /// <summary>
-        /// Löscht eine vorhandene Verknüpfung zwischen einem ApplicationManager und einer Application und erstellt eine neue
+        /// Deletes an existing association between the application and the current application manager and creates a new association
         /// </summary>
         /// <param name="applicationId"></param>
         /// <param name="currentApplicationManagerId"></param>
@@ -179,72 +177,70 @@ namespace SoftwareManager.BLL.Services
         /// <returns></returns>
         public async Task UpdateApplicationManagerAssociation(int applicationId, int currentApplicationManagerId, int newApplicationManagerId)
         {
-            // Applikation abrufen und prüfen ob gefunden
-            var currentApplication =
-                await _softwareUpdateManagerUoW.ApplicationRepository.FindById(applicationId)
-                    .Include(w => w.ApplicationApplicationManagers).FirstOrDefaultAsync();
+            // Get application and check if found
+            var currentApplication = await SoftwareManagerUoW.ApplicationRepository
+                                          .FirstOrDefaultAsync(f => f.Id == applicationId, w => w.ApplicationApplicationManagers);
 
             if (currentApplication == null)
-                throw new EntityNotFoundException();
+                throw new ItemNotFoundException();
 
-            // Bisherige Verknüpfung abrufen und prüfen ob gefunden
+            // Get current association and check if found
             var currentManagerAssociation =
                 currentApplication.ApplicationApplicationManagers.FirstOrDefault(a => a.ApplicationManagerId == currentApplicationManagerId);
             if (currentManagerAssociation == null)
                 throw new BadRequestException();
 
-            // Prüfen ob neuer ApplicationManager exisitiert
-            var doesManagerExist = await _softwareUpdateManagerUoW.ApplicationManagerRepository.AnyAsync(a => a.Id == newApplicationManagerId);
+            // Check if new manager exists
+            var doesManagerExist = await SoftwareManagerUoW.ApplicationManagerRepository.AnyAsync(a => a.Id == newApplicationManagerId);
             if (!doesManagerExist)
-                throw new EntityNotFoundException();
+                throw new ItemNotFoundException();
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                // Neue Verbindung erstellen
-                _softwareUpdateManagerUoW.ApplicationApplicationManagerRepository.Add(new ApplicationApplicationManager()
+                // create new association
+                SoftwareManagerUoW.ApplicationApplicationManagerRepository.Add(new DataModels.
+                    ApplicationApplicationManager()
                 {
                     ApplicationId = applicationId,
                     ApplicationManagerId = newApplicationManagerId,
-                    CreateById = _identityService.CurrentUser.Id
+                    CreateById = IdentityService.CurrentUser.Id
                 });
-                // Alte Verbindung löschen
-                _softwareUpdateManagerUoW.ApplicationApplicationManagerRepository.Remove(currentManagerAssociation);
+                // delete old association
+                SoftwareManagerUoW.ApplicationApplicationManagerRepository.Remove(currentManagerAssociation);
 
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
+                await SoftwareManagerUoW.SaveAsync();
+            });
         }
 
         /// <summary>
-        /// Löscht eine Verknüfung zwischen einer Application und einem ApplicationManager
+        /// Deletes the association between the application and the application manager
         /// </summary>
         /// <param name="applicationId"></param>
         /// <param name="applicationManagerId"></param>
         /// <returns></returns>
         public async Task DeleteApplicationManagerAssociation(int applicationId, int applicationManagerId)
         {
-            // Applikation abrufen und prüfen ob gefunden
-            var currentApplication = await _softwareUpdateManagerUoW.ApplicationRepository
-                                            .FindById(applicationId)
-                                            .Include(w => w.ApplicationApplicationManagers).FirstOrDefaultAsync();
+            // Get application and check if found
+            var currentApplication = await SoftwareManagerUoW.ApplicationRepository
+                                            .FirstOrDefaultAsync(f => f.Id == applicationId, w => w.ApplicationApplicationManagers);
 
             if (currentApplication == null)
-                throw new EntityNotFoundException();
+                throw new ItemNotFoundException();
 
-            // Verknüpfung abrufen und prüfen ob gefunden
+            // Get association and check if found
             var currentManagerAssociation =
                 currentApplication.ApplicationApplicationManagers.FirstOrDefault(a => a.ApplicationManagerId == applicationManagerId);
             if (currentManagerAssociation == null)
                 throw new BadRequestException();
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                // Verknüpfung löschen
-                _softwareUpdateManagerUoW.ApplicationApplicationManagerRepository.Remove(currentManagerAssociation);
+                // Delete association
+                SoftwareManagerUoW.ApplicationApplicationManagerRepository.Remove(currentManagerAssociation);
 
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
+                await SoftwareManagerUoW.SaveAsync();
+                SoftwareManagerUoW.Commit();
+            });
         }
     }
 }

@@ -14,13 +14,13 @@
                 <div class="form-group">
                     <label class="control-label col-sm-1" for="identifier">Identifier:</label>
                     <div class="col-sm-3">
-                        <input type="text" readonly.bind="isExisting" class="form-control" id="identifier" value.bind="entity.applicationIdentifier" placeholder="Generated if empty"/>
+                        <input type="text" readonly.bind="isExisting" class="form-control" id="identifier" value.bind="entity.identifier" placeholder="Generated if empty"/>
                     </div>
                 </div>
 
                 <div class="col-sm-4">
                     <h3>Managers of application</h3>
-                    <compose model.bind="entity.applicationApplicationManagers" view-model="./application-managers"></compose>
+                    <compose model.bind="entity.applicationManagers" view-model="./application-managers"></compose>
                 </div>
             </form>
         </div>

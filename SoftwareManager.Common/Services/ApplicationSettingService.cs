@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using SoftwareManager.Common.Models;
-using Microsoft.Extensions.Options;
 
 namespace SoftwareManager.Common.Services
 {
@@ -17,7 +16,7 @@ namespace SoftwareManager.Common.Services
         {
             AppSettings = new AppSettings();
             AppSettings.SoftwareManagerConnection =
-                @"Data Source=(localdb)\MSSQLLocalDB;Initial Catalog=SoftwareManager;Integrated Security=True;MultipleActiveResultSets=True;App=SoftwareManager DB Migrations;Connection Timeout=9000";
+                @"Data Source=(localdb)\MSSQLLocalDB;Initial Catalog=SoftwareManager_Simple;Integrated Security=True;MultipleActiveResultSets=True;App=SoftwareManager DB Migrations;Connection Timeout=9000";
         }
 
         //public ApplicationSettingService(IOptions<AppSettings> settings)

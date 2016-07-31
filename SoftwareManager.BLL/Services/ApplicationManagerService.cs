@@ -1,92 +1,123 @@
 using System;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using AutoMapper;
-using AutoMapper.QueryableExtensions;
+using FluentValidation;
+using SoftwareManager.BLL.Contracts.Models;
+using SoftwareManager.BLL.Contracts.Services;
 using SoftwareManager.BLL.Exceptions;
 using SoftwareManager.BLL.Extensions;
-using SoftwareManager.DAL.EF6;
-using SoftwareManager.Entities;
+using SoftwareManager.DAL.Contracts;
+using DataModels = SoftwareManager.DAL.Contracts.Models;
 
 namespace SoftwareManager.BLL.Services
 {
     public class ApplicationManagerService : ServiceBase, IApplicationManagerService
     {
-        private readonly ISoftwareManagerUoW _softwareUpdateManagerUoW;
-        private readonly IIdentityService _identityService;
+        private readonly IValidator<ApplicationManager> _applicationManagerValidator;
 
-        public ApplicationManagerService(ISoftwareManagerUoW softwareUpdateManagerUoW, IIdentityService identityService) : base(identityService)
+        public ApplicationManagerService(ISoftwareManagerUoW softwareManagerUoW, IIdentityService identityService, IValidator<ApplicationManager> applicationManagerValidator ) : base(identityService, softwareManagerUoW)
         {
-            _softwareUpdateManagerUoW = softwareUpdateManagerUoW;
-            _identityService = identityService;
+            _applicationManagerValidator = applicationManagerValidator;
         }
 
-        public IQueryable<ApplicationManager> FindApplicationManagers(params string[] expand)
+        public IQueryable<ApplicationManager> FindApplicationManagers(params string[] membersToExpand)
         {
-            var query = _softwareUpdateManagerUoW.ApplicationManagerRepository.FindAll();
-            return query;
+            var resultQuery = SoftwareManagerUoW.ApplicationManagerRepository.FindAll();
+            return ProjectQuery<ApplicationManager, DataModels.ApplicationManager>(membersToExpand, resultQuery);
         }
 
-        public IQueryable<ApplicationManager> FindApplicationManager(int id)
+        public IQueryable<ApplicationManager> FindApplicationManagers(Expression<Func<ApplicationManager, bool>> query, params string[] membersToExpand)
         {
-            return _softwareUpdateManagerUoW.ApplicationManagerRepository.FindById(id);
+            return FindApplicationManagers(membersToExpand).Where(query);
         }
 
-        public Task<ApplicationManager> GetApplicationManagerAsync(int id)
+        public IQueryable<ApplicationManager> FindApplicationManager(params string[] membersToExpand)
         {
-            return _softwareUpdateManagerUoW.ApplicationManagerRepository.GetAsync(id);
+            var resultQuery = SoftwareManagerUoW.ApplicationManagerRepository.FindOne();
+            return ProjectQuery<ApplicationManager, DataModels.ApplicationManager>(membersToExpand, resultQuery);
         }
-        
+
+        public IQueryable<ApplicationManager> FindApplicationManager(Expression<Func<ApplicationManager, bool>> query, params string[] membersToExpand)
+        {
+            return FindApplicationManagers(membersToExpand: membersToExpand).Where(query).Take(1);
+        }
+
+        public async Task<ApplicationManager> GetApplicationManagerAsync(int id)
+        {
+            var applicationManager = await SoftwareManagerUoW
+                                            .ApplicationManagerRepository
+                                            .FirstOrDefaultAsync(f => f.Id == id, e => e.Applications);
+
+            return Mapper.Map<ApplicationManager>(applicationManager);
+        }
+
         public async Task CreateApplicationManager(ApplicationManager applicationManager)
         {
-            CheckAdminRole();
-
-            using (_softwareUpdateManagerUoW.Begin())
+            // Validate model
+            var validationResult = await _applicationManagerValidator.ValidateAsync(new ValidationContext<ApplicationManager>(applicationManager));
+            if (!validationResult.IsValid)
             {
-                _softwareUpdateManagerUoW.ApplicationManagerRepository.Add(applicationManager);
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
+                throw new ModelValidationException("Model is invalid", validationResult.ExtractModelErrors());
             }
+
+            IdentityService.CheckAdminRole();
+
+            var internalApplication = Mapper.Map<DataModels.ApplicationManager>(applicationManager);
+
+            await CreateOrUseTransaction(async () =>
+            {
+                SoftwareManagerUoW.ApplicationManagerRepository.Add(internalApplication);
+                await SoftwareManagerUoW.SaveAsync();
+            });
+
+            Mapper.Map(internalApplication, applicationManager);
         }
 
         public async Task<ApplicationManager> UpdateApplicationManager(int key, ApplicationManager applicationManager)
         {
-            //CheckAdminRole();
+            // Validate model
+            var validationResult = await _applicationManagerValidator.ValidateAsync(new ValidationContext<ApplicationManager>(applicationManager));
+            if (!validationResult.IsValid)
+            {
+                throw new ModelValidationException("Model is invalid", validationResult.ExtractModelErrors());
+            }
 
-            var currentApplicationManager = await _softwareUpdateManagerUoW.ApplicationManagerRepository.GetAsync(key);
+            // Check admin access
+            IdentityService.CheckAdminRole();
 
+            var currentApplicationManager = await SoftwareManagerUoW.ApplicationManagerRepository.GetAsync(key);
             if (currentApplicationManager == null)
-                throw new EntityNotFoundException($"ApplicationManager with id {key} not found");
+                throw new ItemNotFoundException($"ApplicationManager with id {key} not found");
 
             applicationManager.Id = currentApplicationManager.Id;
             Mapper.Map(applicationManager, currentApplicationManager);
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                _softwareUpdateManagerUoW.ApplicationManagerRepository.Update(currentApplicationManager);
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
-            return currentApplicationManager; 
+                SoftwareManagerUoW.ApplicationManagerRepository.Update(currentApplicationManager);
+                await SoftwareManagerUoW.SaveAsync();
+            });
+
+            var updatedManager = Mapper.Map<ApplicationManager>(currentApplicationManager);
+            return updatedManager;
         }
 
         public async Task DeleteApplicationManager(int key)
         {
-            CheckAdminRole();
+            IdentityService.CheckAdminRole();
 
-            var currentApplicationManager = await _softwareUpdateManagerUoW.ApplicationManagerRepository.GetAsync(key);
+            var currentApplicationManager = await SoftwareManagerUoW.ApplicationManagerRepository.GetAsync(key);
 
             if (currentApplicationManager == null)
-                throw new EntityNotFoundException($"ApplicationManager with id {key} not found");
+                throw new ItemNotFoundException($"ApplicationManager with id {key} not found");
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                _softwareUpdateManagerUoW.ApplicationManagerRepository.Remove(currentApplicationManager);
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
+                SoftwareManagerUoW.ApplicationManagerRepository.Remove(currentApplicationManager);
+                await SoftwareManagerUoW.SaveAsync();
+            });
         }
     }
-
-
 }

@@ -40,11 +40,11 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="Microsoft.Extensions.DependencyInjection, Version=1.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Extensions.DependencyInjection.1.0.0-rc2-final\lib\netstandard1.1\Microsoft.Extensions.DependencyInjection.dll</HintPath>
+      <HintPath>..\packages\Microsoft.Extensions.DependencyInjection.1.0.0\lib\netstandard1.1\Microsoft.Extensions.DependencyInjection.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions, Version=1.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Extensions.DependencyInjection.Abstractions.1.0.0-rc2-final\lib\netstandard1.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
+      <HintPath>..\packages\Microsoft.Extensions.DependencyInjection.Abstractions.1.0.0\lib\netstandard1.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -52,7 +52,7 @@
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Core" />
     <Reference Include="System.Diagnostics.DiagnosticSource, Version=4.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.Diagnostics.DiagnosticSource.4.0.0-rc2-24027\lib\net46\System.Diagnostics.DiagnosticSource.dll</HintPath>
+      <HintPath>..\packages\System.Diagnostics.DiagnosticSource.4.0.0\lib\net46\System.Diagnostics.DiagnosticSource.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System.Transactions" />
@@ -71,19 +71,15 @@
     <Compile Include="Configurations\DateTrackedEntityConfiguration.cs" />
     <Compile Include="Configurations\EntityConfiguration.cs" />
     <Compile Include="ISoftwareManagerContext.cs" />
+    <Compile Include="Models\DbSaveResult.cs" />
     <Compile Include="ModuleInit.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Models\DbSaveResult.cs" />
     <Compile Include="Repositories\TrackedGenericRepository.cs" />
     <Compile Include="Repositories\GenericRepository.cs" />
-    <Compile Include="Repositories\IGenericRepository.cs" />
-    <Compile Include="ISoftwareManagerUoW.cs" />
     <Compile Include="SoftwareManagerContext.cs">
       <DependentUpon>ISoftwareManagerContext.cs</DependentUpon>
     </Compile>
-    <Compile Include="SoftwareManagerUoW.cs">
-      <DependentUpon>ISoftwareManagerUoW.cs</DependentUpon>
-    </Compile>
+    <Compile Include="SoftwareManagerUoW.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -94,9 +90,9 @@
       <Project>{2fc700c5-ec4a-4268-a215-7283be93626b}</Project>
       <Name>SoftwareManager.Common</Name>
     </ProjectReference>
-    <ProjectReference Include="..\SoftwareManager.Entities\SoftwareManager.Entities.csproj">
-      <Project>{9366f223-aecd-457f-98d1-6202faf45304}</Project>
-      <Name>SoftwareManager.Entities</Name>
+    <ProjectReference Include="..\SoftwareManager.DAL.Contracts\SoftwareManager.DAL.Contracts.csproj">
+      <Project>{C9850104-8388-4023-A763-F245AC073895}</Project>
+      <Name>SoftwareManager.DAL.Contracts</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

@@ -2,7 +2,7 @@ import {DateTrackedEntity, ApplicationApplicationManagerEntity, ApplicationVersi
 
 export class ApplicationEntity extends DateTrackedEntity implements odata.entities.IApplicationEntity {
     name: string;
-    applicationIdentifier: any;
+    identifier: any;
     applicationApplicationManagers: odata.entities.IApplicationApplicationManagerEntity[];
     applicationVersions: odata.entities.IApplicationVersionEntity[];
 

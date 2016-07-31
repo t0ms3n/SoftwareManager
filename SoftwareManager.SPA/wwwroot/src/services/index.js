@@ -1,4 +1,4 @@
-System.register(['./odata-base-service', './application-service', './application-manager-service', './lookup-service'], function(exports_1, context_1) {
+System.register(['./odata-base-service', './application-service', './application-manager-service', './lookup-service', './odata-batch-service'], function(exports_1, context_1) {
     "use strict";
     var __moduleName = context_1 && context_1.id;
     return {
@@ -21,6 +21,13 @@ System.register(['./odata-base-service', './application-service', './application
             function (lookup_service_1_1) {
                 exports_1({
                     "LookupService": lookup_service_1_1["LookupService"]
+                });
+            },
+            function (odata_batch_service_1_1) {
+                exports_1({
+                    "ODataBatchService": odata_batch_service_1_1["ODataBatchService"],
+                    "ISingleBatchRequest": odata_batch_service_1_1["ISingleBatchRequest"],
+                    "SingleBatchRequestType": odata_batch_service_1_1["SingleBatchRequestType"]
                 });
             }],
         execute: function() {

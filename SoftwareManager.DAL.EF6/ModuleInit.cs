@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using SoftwareManager.Common.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using SoftwareManager.DAL.Contracts;
 
 namespace SoftwareManager.DAL.EF6
 {
@@ -14,8 +15,8 @@ namespace SoftwareManager.DAL.EF6
     {
         public void Initialize(IModuleRegistrar moduleRegistrar)
         {
-            moduleRegistrar.RegisterType<ISoftwareManagerContext, SoftwareManagerContext>(lifeTime: ServiceLifetime.Scoped);
-            moduleRegistrar.RegisterType<ISoftwareManagerUoW, SoftwareManagerUoW>(lifeTime: ServiceLifetime.Scoped);
+            //moduleRegistrar.RegisterType<ISoftwareManagerContext, SoftwareManagerContext>(lifeTime: ServiceLifetime.Scoped);
+            //moduleRegistrar.RegisterType<ISoftwareManagerUoW, SoftwareManagerUoW>(lifeTime: ServiceLifetime.Scoped);
         }
     }
 }

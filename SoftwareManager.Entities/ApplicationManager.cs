@@ -9,13 +9,13 @@ namespace SoftwareManager.Entities
         public string LoginName { get; set; }
         public bool IsActive { get; set; }
         public bool IsAdmin { get; set; }
-        public ICollection<Application> CreatedApplications { get; set; }
-        public ICollection<Application> ModifiedApplications { get; set; }
-        public ICollection<ApplicationApplicationManager> CreatedApplicationApplicationManagers { get; set; }
-        public ICollection<ApplicationApplicationManager> ModifiedApplicationApplicationManagers { get; set; }
-        public ICollection<ApplicationApplicationManager> Applications { get; set; }
-        public ICollection<ApplicationVersion> CreatedApplicationVersions { get; set; }
-        public ICollection<ApplicationVersion> ModifiedApplicationVersions { get; set; }
+        public IList<Application> CreatedApplications { get; set; }
+        public IList<Application> ModifiedApplications { get; set; }
+        public IList<ApplicationApplicationManager> CreatedApplicationApplicationManagers { get; set; }
+        public IList<ApplicationApplicationManager> ModifiedApplicationApplicationManagers { get; set; }
+        public IList<ApplicationApplicationManager> Applications { get; set; }
+        public IList<ApplicationVersion> CreatedApplicationVersions { get; set; }
+        public IList<ApplicationVersion> ModifiedApplicationVersions { get; set; }
     }
 
 }

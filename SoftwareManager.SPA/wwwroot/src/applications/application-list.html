@@ -16,7 +16,7 @@
                     <tbody>
                         <tr repeat.for="application of applications">
                             <td>${application.name}</td>
-                            <td>${application.applicationIdentifier}</td>
+                            <td>${application.identifier}</td>
                             <td>
                                 <compose view="../resources/buttons/edit-button.html" click.delegate="open(application.id)"></compose>
                             </td>

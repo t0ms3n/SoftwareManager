@@ -4,11 +4,13 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
-using SoftwareManager.Entities;
+using SoftwareManager.DAL.Contracts;
+using SoftwareManager.DAL.Contracts.Models;
+using SoftwareManager.DAL.Contracts.Repositories;
 
 namespace SoftwareManager.DAL.EF6.Repositories
 {
-    public class TrackedGenericRepository<TEntity> : GenericRepository<TEntity>, IGenericRepository<TEntity> where TEntity : class, IDateTrackedEntity, IEntity
+    public class TrackedGenericRepository<TEntity> : GenericRepository<TEntity> where TEntity : class, IDateTrackedEntity, IEntity
     {
         
         public TrackedGenericRepository(ISoftwareManagerContext context) : base(context)

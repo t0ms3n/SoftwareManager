@@ -1,25 +1,24 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Data.Entity;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
 using System.Web.OData;
 using System.Web.OData.Query;
 using System.Web.OData.Routing;
+using SoftwareManager.BLL.Contracts.Models;
+using SoftwareManager.BLL.Contracts.Services;
 using SoftwareManager.BLL.Exceptions;
-using SoftwareManager.BLL.Services;
-using SoftwareManager.Entities;
-using SoftwareManager.WebApi.Validators;
+using SoftwareManager.WebApi.Extensions;
+using SoftwareManager.WebApi.Helpers;
+using SoftwareManager.WebApi.HttpActionResults;
 
 namespace SoftwareManager.WebApi.Controllers
 {
     [ODataRoutePrefix("Applications")]
-    public class ApplicationsController : ODataController
+    public class ApplicationsController : ODataBaseController
     {
-        private readonly IApplicationService _applicationService;      
+        private readonly IApplicationService _applicationService;
 
         public ApplicationsController(IApplicationService applicationService)
         {
@@ -29,113 +28,81 @@ namespace SoftwareManager.WebApi.Controllers
         [HttpGet]
         [EnableQuery]
         [ODataRoute("")]
-        public IHttpActionResult GetApplications()
+        public IHttpActionResult GetApplications(ODataQueryOptions<Application> queryOptions)
         {
-            return Ok(_applicationService.FindApplications());
+            string[] membersToExpand = ODataQueryOptionsExtractor.GetNavigationPropertiesToExpand(queryOptions.SelectExpand);
+            var query = _applicationService.FindApplications(membersToExpand);
+            return Ok(query);
         }
 
         [HttpGet]
         [EnableQuery(AllowedQueryOptions = AllowedQueryOptions.Select | AllowedQueryOptions.Expand)]
         [ODataRoute("({key})")]
-        public IHttpActionResult GetApplication([FromODataUri] int key)
+        public IHttpActionResult GetApplication([FromODataUri] int key, ODataQueryOptions<Application> queryOptions)
         {
-            var application = _applicationService.FindApplication(key);
+            var application = _applicationService.FindApplication(q => q.Id == key);
 
             if (!application.Any())
             {
                 return NotFound();
             }
 
-            return Ok(SingleResult.Create(application));
+            string[] membersToExpand = ODataQueryOptionsExtractor.GetNavigationPropertiesToExpand(queryOptions.SelectExpand);
+            var query = _applicationService.FindApplication(f => f.Id == key, membersToExpand);
+
+            return Ok(SingleResult.Create(query));
         }
 
         [HttpGet]
-        //[ODataRoute("({key})/id")]
-        //[ODataRoute("({key})/applicationIdentifier")]
-        //[ODataRoute("({key})/name")]
+        [ODataRoute("({key})/id")]
+        [ODataRoute("({key})/identifier")]
+        [ODataRoute("({key})/name")]
         public IHttpActionResult GetApplicationProperty([FromODataUri] int key)
         {
-            var application = _applicationService.FindApplication(key).FirstOrDefault();
-
-            if (application == null)
-            {
-                return NotFound();
-            }
-
-            var propertyToGet = Url.Request.RequestUri.Segments.Last();
-
-            if (!application.HasProperty(propertyToGet))
-            {
-                return NotFound();
-            }
-
-            var propertyValue = application.GetValue(propertyToGet);
-
-            if (propertyValue == null)
-            {
-                return StatusCode(System.Net.HttpStatusCode.NoContent);
-            }
-
-            return this.CreateOkHttpActionResult(propertyValue);
+            var application = _applicationService.FindApplication(q => q.Id == key).FirstOrDefault();
+            return GetObjectProperty(application);
         }
 
         [HttpGet]
-        //[ODataRoute("({key})/applicationVersions")]
-        //[ODataRoute("({key})/applicationApplicationManagers")]
+        [ODataRoute("({key})/applicationVersions")]
+        [ODataRoute("({key})/applicationApplicationManagers")]
         public IHttpActionResult GetApplicationCollection([FromODataUri] int key)
         {
-            var collectionToGet = Url.Request.RequestUri.Segments.Last();
-
-            var application = _applicationService.FindApplications(collectionToGet).FirstOrDefault(w => w.Id == key);
-
-            if (application == null)
-            {
-                return NotFound();
-            }
-
-            var collectionPropertyValue = application.GetValue(collectionToGet);
-            return this.CreateOkHttpActionResult(collectionPropertyValue);
+            var collectionToGet = Url.Request.RequestUri.Segments.Last().FirstLetterToUpper();
+            var application = _applicationService.FindApplication(f => f.Id == key, collectionToGet).FirstOrDefault();
+            return GetObjectCollection(application, collectionToGet);
         }
 
         [HttpPost]
         public async Task<IHttpActionResult> Post(Application application)
         {
-            ValidateModel(application);
-
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
-            
-            await _applicationService.CreateApplication(application);
+
+            try
+            {
+                await _applicationService.CreateApplication(application);
+            }
+            catch (ModelValidationException modelValidationException)
+            {
+
+                return new BadRequestWithModelErrorResult(modelValidationException.ModelErrors);
+            }
 
             return Created(application);
         }
 
-
-        //public async Task<IHttpActionResult> Put([FromODataUri] int key, Application application)
-        //{
-        //    if (!ModelState.IsValid)
-        //    {
-        //        return BadRequest(ModelState);
-        //    }
-
-        //    try
-        //    {
-        //        await _applicationService.UpdateApplication(key, application);
-        //    }
-        //    catch (EntityNotFoundException)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    return StatusCode(HttpStatusCode.NoContent);
-        //}
-
         public async Task<IHttpActionResult> Patch([FromODataUri] int key, Delta<Application> application, ODataQueryOptions<Application> options)
         {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
             if (options.IfMatch == null
-               || !options.IfMatch.ApplyTo(_applicationService.FindApplication(key)).Any())
+               || !options.IfMatch.ApplyTo(_applicationService.FindApplication(f => f.Id == key)).Any())
             {
                 return StatusCode(HttpStatusCode.PreconditionFailed);
             }
@@ -146,24 +113,28 @@ namespace SoftwareManager.WebApi.Controllers
                 return NotFound();
             }
 
+            //Pass Delta to BLL and patch there?
             application.Patch(currentApplication);
 
-            ValidateModel(currentApplication);
-            if (!ModelState.IsValid)
+            try
             {
-                return BadRequest(ModelState);
+                // Update
+                await _applicationService.UpdateApplication(key, currentApplication);
             }
+            catch (ModelValidationException modelValidationException)
+            {
 
-            // Erneuter Abruf der Entity ... Patch in BLL?
-            await _applicationService.UpdateApplication(key, currentApplication);
+                return new BadRequestWithModelErrorResult(modelValidationException.ModelErrors);
+            }
 
             return StatusCode(HttpStatusCode.NoContent);
         }
 
         public async Task<IHttpActionResult> Delete([FromODataUri] int key, ODataQueryOptions<Application> options)
         {
+            // Delete only if it was not changed?
             if (options.IfMatch == null
-               || !options.IfMatch.ApplyTo(_applicationService.FindApplication(key)).Any())
+               || !options.IfMatch.ApplyTo(_applicationService.FindApplication(f => f.Id == key)).Any())
             {
                 return StatusCode(HttpStatusCode.PreconditionFailed);
             }
@@ -172,7 +143,7 @@ namespace SoftwareManager.WebApi.Controllers
             {
                 await _applicationService.DeleteApplication(key);
             }
-            catch (EntityNotFoundException)
+            catch (ItemNotFoundException)
             {
                 return NotFound();
             }
@@ -181,7 +152,7 @@ namespace SoftwareManager.WebApi.Controllers
         }
 
         [HttpPost]
-        //[ODataRoute("({key})/applicationApplicationManagers/$ref")]
+        [ODataRoute("({key})/applicationApplicationManagers/$ref")]
         public async Task<IHttpActionResult> CreateApplicationManagerAssociation([FromODataUri] int key,
             [FromBody] Uri link)
         {
@@ -190,7 +161,7 @@ namespace SoftwareManager.WebApi.Controllers
             {
                 await _applicationService.CreateApplicationManagerAssociation(key, keyOfManagerToAdd);
             }
-            catch (EntityNotFoundException)
+            catch (ItemNotFoundException)
             {
                 return NotFound();
             }
@@ -203,7 +174,7 @@ namespace SoftwareManager.WebApi.Controllers
         }
 
         [HttpPut]
-        //[ODataRoute("({key})/applicationApplicationManagers({relatedKey})/$ref")]
+        [ODataRoute("({key})/applicationApplicationManagers({relatedKey})/$ref")]
         public async Task<IHttpActionResult> UpdateApplicationManagerAssociation([FromODataUri] int key, [FromODataUri] int relatedKey,
             [FromBody] Uri link)
         {
@@ -212,7 +183,7 @@ namespace SoftwareManager.WebApi.Controllers
             {
                 await _applicationService.UpdateApplicationManagerAssociation(key, relatedKey, keyOfManagerToAdd);
             }
-            catch (EntityNotFoundException)
+            catch (ItemNotFoundException)
             {
                 return NotFound();
             }
@@ -226,14 +197,14 @@ namespace SoftwareManager.WebApi.Controllers
 
         //DELETE odata/Applications('key')/ApplicationApplicationManagers/$ref?$id={'relatedUriWithRelatedKey'}
         [HttpDelete]
-        //[ODataRoute("({key})/applicationApplicationManagers({relatedKey})/$ref")]
+        [ODataRoute("({key})/applicationApplicationManagers({relatedKey})/$ref")]
         public async Task<IHttpActionResult> DeleteApplicationManagerAssociation([FromODataUri] int key, [FromODataUri] int relatedKey)
         {
             try
             {
                 await _applicationService.DeleteApplicationManagerAssociation(key, relatedKey);
             }
-            catch (EntityNotFoundException)
+            catch (ItemNotFoundException)
             {
                 return NotFound();
             }
@@ -243,19 +214,6 @@ namespace SoftwareManager.WebApi.Controllers
             }
 
             return StatusCode(HttpStatusCode.NoContent);
-        }
-
-        private void ValidateModel(Application item)
-        {
-            var validator = new ApplicationValidator();
-            var validationResult = validator.Validate(item);
-            if (!validationResult.IsValid)
-            {
-                foreach (var error in validationResult.Errors)
-                {
-                    ModelState.AddModelError(error.PropertyName, error.ErrorMessage);
-                }
-            }
         }
     }
 }

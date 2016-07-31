@@ -1,88 +1,119 @@
+using System;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using AutoMapper;
-using AutoMapper.QueryableExtensions;
+using FluentValidation;
+using SoftwareManager.BLL.Contracts.Models;
+using SoftwareManager.BLL.Contracts.Services;
 using SoftwareManager.BLL.Exceptions;
 using SoftwareManager.BLL.Extensions;
-using SoftwareManager.DAL.EF6;
-using SoftwareManager.Entities;
+using SoftwareManager.BLL.Validators;
+using SoftwareManager.DAL.Contracts;
+using DataModels = SoftwareManager.DAL.Contracts.Models;
 
 namespace SoftwareManager.BLL.Services
 {
     public class ApplicationVersionService : ServiceBase, IApplicationVersionService
     {
-
-        private readonly ISoftwareManagerUoW _softwareUpdateManagerUoW;
-        private readonly IIdentityService _identityService;
-
-        public ApplicationVersionService(ISoftwareManagerUoW softwareUpdateManagerUoW, IIdentityService identityService) : base(identityService)
+        private readonly IValidator<ApplicationVersion> _applicationVersionValidator;
+        
+        public ApplicationVersionService(ISoftwareManagerUoW softwareManagerUoW, IIdentityService identityService, IValidator<ApplicationVersion> applicationVersionValidator ) : base(identityService, softwareManagerUoW)
         {
-            _softwareUpdateManagerUoW = softwareUpdateManagerUoW;
-            _identityService = identityService;
+            _applicationVersionValidator = applicationVersionValidator;
         }
 
-        public IQueryable<ApplicationVersion> FindApplicationVersions(params string[] expand)
+        public IQueryable<ApplicationVersion> FindApplicationVersions(params string[] membersToExpand)
         {
-            var query = _softwareUpdateManagerUoW.ApplicationVersionRepository.FindAll();
-            return query;
+            var resultQuery = SoftwareManagerUoW.ApplicationVersionRepository.FindAll();
+            return ProjectQuery<ApplicationVersion, DataModels.ApplicationVersion>(membersToExpand, resultQuery);
+        }
+        public IQueryable<ApplicationVersion> FindApplicationVersions(Expression<Func<ApplicationVersion, bool>> query, params string[] membersToExpand)
+        {
+            return FindApplicationVersions(membersToExpand).Where(query);
         }
 
-        public IQueryable<ApplicationVersion> FindApplicationVersion(int id)
+        public IQueryable<ApplicationVersion> FindApplicationVersion(params string[] membersToExpand)
         {
-            return _softwareUpdateManagerUoW.ApplicationVersionRepository.FindById(id);
+            var resultQuery = SoftwareManagerUoW.ApplicationVersionRepository.FindOne();
+            return ProjectQuery<ApplicationVersion, DataModels.ApplicationVersion>(membersToExpand, resultQuery);
         }
 
-        public Task<ApplicationVersion> GetApplicationVersionAsync(int id)
+        public IQueryable<ApplicationVersion> FindApplicationVersion(Expression<Func<ApplicationVersion, bool>> query, params string[] membersToExpand)
         {
-            return _softwareUpdateManagerUoW.ApplicationVersionRepository.GetAsync(id);
+            return FindApplicationVersions(membersToExpand).Where(query).Take(1);
+        }
+
+        public async Task<ApplicationVersion> GetApplicationVersionAsync(int id)
+        {
+            var applicationVersion = await SoftwareManagerUoW.ApplicationVersionRepository.FirstOrDefaultAsync(f => f.Id == id,
+               e => e.Application
+               );
+
+            return Mapper.Map<ApplicationVersion>(applicationVersion);
         }
 
         public async Task CreateApplicationVersion(ApplicationVersion applicationVersion)
         {
-            var newApplicationVersion = applicationVersion;
-            newApplicationVersion.CreateById = _identityService.CurrentUser.Id;
-
-            using (_softwareUpdateManagerUoW.Begin())
+            // Validate model
+            var validationResult = await _applicationVersionValidator.ValidateAsync(new ValidationContext<ApplicationVersion>(applicationVersion));
+            if (!validationResult.IsValid)
             {
-                _softwareUpdateManagerUoW.ApplicationVersionRepository.Add(newApplicationVersion);
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
+                throw new ModelValidationException("Model is invalid", validationResult.ExtractModelErrors());
             }
+
+            var internalApplicationVersion = Mapper.Map<DataModels.ApplicationVersion>(applicationVersion);
+            internalApplicationVersion.CreateById = IdentityService.CurrentUser.Id;
+
+            await CreateOrUseTransaction(async () =>
+            {
+                SoftwareManagerUoW.ApplicationVersionRepository.Add(internalApplicationVersion);
+                await SoftwareManagerUoW.SaveAsync();
+            });
+
+            Mapper.Map(internalApplicationVersion, applicationVersion);
         }
 
         public async Task<ApplicationVersion> UpdateApplicationVersion(int key, ApplicationVersion applicationVersion)
         {
-            var currentApplicationVersion = await _softwareUpdateManagerUoW.ApplicationVersionRepository.GetAsync(key);
+            // Validate model
+            var validationResult = await _applicationVersionValidator.ValidateAsync(new ValidationContext<ApplicationVersion>(applicationVersion));
+            if (!validationResult.IsValid)
+            {
+                throw new ModelValidationException("Model is invalid", validationResult.ExtractModelErrors());
+            }
+
+            var currentApplicationVersion = await SoftwareManagerUoW.ApplicationVersionRepository.GetAsync(key);
 
             if (currentApplicationVersion == null)
-                throw new EntityNotFoundException($"ApplicationVersion with id {key} not found");
+                throw new ItemNotFoundException($"ApplicationVersion with id {key} not found");
 
             applicationVersion.Id = currentApplicationVersion.Id;
             Mapper.Map(applicationVersion, currentApplicationVersion);
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                currentApplicationVersion.ModifyById = _identityService.CurrentUser.Id;
-                _softwareUpdateManagerUoW.ApplicationVersionRepository.Update(currentApplicationVersion);
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
-            return currentApplicationVersion;
+                currentApplicationVersion.ModifyById = IdentityService.CurrentUser.Id;
+                SoftwareManagerUoW.ApplicationVersionRepository.Update(currentApplicationVersion);
+                await SoftwareManagerUoW.SaveAsync();
+            });
+
+            var updatedApplicationVersion = Mapper.Map<ApplicationVersion>(currentApplicationVersion);
+            return updatedApplicationVersion;
         }
 
         public async Task DeleteApplicationVersion(int key)
         {
-            var currentApplicationVersion = await _softwareUpdateManagerUoW.ApplicationVersionRepository.GetAsync(key);
+            var currentApplicationVersion = await SoftwareManagerUoW.ApplicationVersionRepository.GetAsync(key);
 
             if (currentApplicationVersion == null)
-                throw new EntityNotFoundException($"ApplicationVersion with id {key} not found");
+                throw new ItemNotFoundException($"ApplicationVersion with id {key} not found");
 
-            using (_softwareUpdateManagerUoW.Begin())
+            await CreateOrUseTransaction(async () =>
             {
-                _softwareUpdateManagerUoW.ApplicationVersionRepository.Remove(currentApplicationVersion);
-                await _softwareUpdateManagerUoW.SaveAsync();
-                _softwareUpdateManagerUoW.Commit();
-            }
+                SoftwareManagerUoW.ApplicationVersionRepository.Remove(currentApplicationVersion);
+                await SoftwareManagerUoW.SaveAsync();
+            });
         }
     }
 }

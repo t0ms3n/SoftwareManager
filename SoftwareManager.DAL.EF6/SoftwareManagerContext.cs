@@ -12,21 +12,20 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SoftwareManager.Common.Services;
+using SoftwareManager.DAL.Contracts;
+using SoftwareManager.DAL.Contracts.Models;
 using SoftwareManager.DAL.EF6.Configurations;
-using SoftwareManager.Entities;
 
 
 namespace SoftwareManager.DAL.EF6
 {
     public class SoftwareManagerContext : DbContext, ISoftwareManagerContext
     {
-        private readonly IApplicationSettingService _settingService;
-
         public DbSet<Application> Applications { get; set; }
         public DbSet<ApplicationApplicationManager> ApplicationApplicationManagers { get; set; }
         public DbSet<ApplicationManager> ApplicationManagers { get; set; }
         public DbSet<ApplicationVersion> ApplicationVersions { get; set; }
-      
+
         static SoftwareManagerContext()
         {
             Database.SetInitializer<SoftwareManagerContext>(null);
@@ -34,14 +33,13 @@ namespace SoftwareManager.DAL.EF6
 
         public SoftwareManagerContext(IApplicationSettingService settingService) : base(new SqlConnection(settingService.AppSettings.SoftwareManagerConnection), true)
         {
-            _settingService = settingService;
             base.Database.Log += s =>
             {
                 Debug.WriteLine(s);
             };
 
         }
-      
+
         protected override void OnModelCreating(DbModelBuilder modelBuilder)
         {
             modelBuilder.Configurations.Add(new ApplicationConfiguration());

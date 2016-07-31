@@ -8,8 +8,8 @@ namespace SoftwareManager.Entities
         public string Name { get; set; }
         public Guid ApplicationIdentifier { get; set; }
 
-        public ICollection<ApplicationApplicationManager> ApplicationApplicationManagers { get; set; }
-        public ICollection<ApplicationVersion> ApplicationVersions { get; set; }
+        public IList<ApplicationApplicationManager> ApplicationApplicationManagers { get; set; }
+        public IList<ApplicationVersion> ApplicationVersions { get; set; }
     }
 
 }

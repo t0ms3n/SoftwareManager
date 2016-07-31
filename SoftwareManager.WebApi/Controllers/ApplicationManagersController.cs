@@ -1,20 +1,28 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
+using System.Web.Http.Results;
 using System.Web.OData;
+using System.Web.OData.Extensions;
 using System.Web.OData.Query;
 using System.Web.OData.Routing;
+using SoftwareManager.BLL.Contracts.Models;
+using SoftwareManager.BLL.Contracts.Services;
 using SoftwareManager.BLL.Exceptions;
-using SoftwareManager.BLL.Services;
-using SoftwareManager.Entities;
-using SoftwareManager.WebApi.Validators;
+using SoftwareManager.BLL.Models;
+using SoftwareManager.WebApi.Extensions;
+using SoftwareManager.WebApi.Helpers;
+using SoftwareManager.WebApi.HttpActionResults;
 
 namespace SoftwareManager.WebApi.Controllers
 {
     [ODataRoutePrefix("ApplicationManagers")]
 
-    public class ApplicationManagersController : ODataController
+    public class ApplicationManagersController : ODataBaseController
     {
         private readonly IApplicationManagerService _applicationManagerService;
 
@@ -26,93 +34,73 @@ namespace SoftwareManager.WebApi.Controllers
         [HttpGet]
         [EnableQuery]
         [ODataRoute("")]
-        public IQueryable<ApplicationManager> GetApplicationManagers()
+        public IHttpActionResult GetApplicationManagers(ODataQueryOptions<ApplicationManager> queryOptions)
         {
-            return _applicationManagerService.FindApplicationManagers();
+            string[] membersToExpand = ODataQueryOptionsExtractor.GetNavigationPropertiesToExpand(queryOptions.SelectExpand);
+            var query = _applicationManagerService.FindApplicationManagers(membersToExpand);
+            return Ok(query);
         }
 
         [HttpGet]
         [EnableQuery(AllowedQueryOptions = AllowedQueryOptions.Select | AllowedQueryOptions.Expand)]
         [ODataRoute("({key})")]
-        public IHttpActionResult GetApplicationManager([FromODataUri] int key)
+        public IHttpActionResult GetApplicationManager([FromODataUri] int key, ODataQueryOptions<ApplicationManager> queryOptions)
         {
-            var applicationManager = _applicationManagerService.FindApplicationManager(key);
+            var applicationManager = _applicationManagerService.FindApplicationManager(q => q.Id == key);
 
             if (!applicationManager.Any())
             {
                 return NotFound();
             }
 
-            return Ok(SingleResult.Create(applicationManager));
+            string[] membersToExpand = ODataQueryOptionsExtractor.GetNavigationPropertiesToExpand(queryOptions.SelectExpand);
+            var query = _applicationManagerService.FindApplicationManager(f => f.Id == key, membersToExpand);
+
+            return Ok(SingleResult.Create(query));
         }
 
         [HttpGet]
-        //[ODataRoute("({key})/id")]
-        //[ODataRoute("({key})/isActive")]
-        //[ODataRoute("({key})/isAdmin")]
-        //[ODataRoute("({key})/name")]
-        //[ODataRoute("({key})/loginName")]
+        [ODataRoute("({key})/id")]
+        [ODataRoute("({key})/isActive")]
+        [ODataRoute("({key})/isAdmin")]
+        [ODataRoute("({key})/name")]
+        [ODataRoute("({key})/loginName")]
         public IHttpActionResult GetApplicationManagerProperty([FromODataUri] int key)
         {
-            var applicationManager = _applicationManagerService.FindApplicationManager(key).FirstOrDefault();
-            if (applicationManager == null)
-            {
-                return NotFound();
-            }
-
-            var propertyToGet = Url.Request.RequestUri.Segments.Last();
-
-            if (!applicationManager.HasProperty(propertyToGet))
-            {
-                return NotFound();
-            }
-
-            var propertyValue = applicationManager.GetValue(propertyToGet);
-
-            if (propertyValue == null)
-            {
-                return StatusCode(System.Net.HttpStatusCode.NoContent);
-            }
-
-            return this.CreateOkHttpActionResult(propertyValue);
+            var applicationManager = _applicationManagerService.FindApplicationManager(f => f.Id == key).FirstOrDefault();
+            return GetObjectProperty(applicationManager);
         }
 
         [HttpGet]
-        //[ODataRoute("Set({key})/Collection")]
+        [ODataRoute("({key})/createdApplicationVersions")]
+        [ODataRoute("({key})/createdApplications")]
+        [ODataRoute("({key})/mangerOfApplications")]
         public IHttpActionResult GetApplicationManagerCollection([FromODataUri] int key)
         {
-            var collectionToGet = Url.Request.RequestUri.Segments.Last();
-
+            var collectionToGet = Url.Request.RequestUri.Segments.Last().FirstLetterToUpper();
             var applicationManager = _applicationManagerService.FindApplicationManagers(collectionToGet).FirstOrDefault(w => w.Id == key);
 
-            if (applicationManager == null)
-            {
-                return NotFound();
-            }
-
-            var collectionPropertyValue = applicationManager.GetValue(collectionToGet);
-            return this.CreateOkHttpActionResult(collectionPropertyValue);
+            return GetObjectCollection(applicationManager, collectionToGet);
         }
 
         [HttpPost]
         public async Task<IHttpActionResult> Post(ApplicationManager applicationManager)
         {
-            var validator = new ApplicationManagerValidator();
-            var validationResult = validator.Validate(applicationManager);
-            if (!validationResult.IsValid)
-            {
-                foreach (var error in validationResult.Errors)
-                {
-                    ModelState.AddModelError(error.PropertyName, error.ErrorMessage);
-                }
-            }
-
             if (!ModelState.IsValid)
-            { 
+            {
                 return BadRequest(ModelState);
             }
 
-            await _applicationManagerService.CreateApplicationManager(applicationManager);
+            try
+            {
+                await _applicationManagerService.CreateApplicationManager(applicationManager);
+            }
+            catch (ModelValidationException modelValidationException)
+            {
+
+                return new BadRequestWithModelErrorResult(modelValidationException.ModelErrors);
+            }
+
 
             return Created(applicationManager);
         }
@@ -152,30 +140,25 @@ namespace SoftwareManager.WebApi.Controllers
             }
 
             if (options.IfMatch == null
-                || !options.IfMatch.ApplyTo(_applicationManagerService.FindApplicationManager(key)).Any())
+                || !options.IfMatch.ApplyTo(_applicationManagerService.FindApplicationManager(f => f.Id == key)).Any())
             {
                 return StatusCode(HttpStatusCode.PreconditionFailed);
-            }          
+            }
 
+            //Pass Delta to BLL and patch there?
             applicationManager.Patch(currentApplicationManager);
 
-            var validator = new ApplicationManagerValidator();
-            var validationResult = validator.Validate(currentApplicationManager);
-            if (!validationResult.IsValid)
-            {
-                foreach (var error in validationResult.Errors)
-                {
-                    ModelState.AddModelError(error.PropertyName, error.ErrorMessage);
-                }
-            }
 
-            if (!ModelState.IsValid)
+            try
             {
-                return BadRequest(ModelState);
+                // Update           
+                await _applicationManagerService.UpdateApplicationManager(key, currentApplicationManager);
             }
+            catch (ModelValidationException modelValidationException)
+            {
 
-            // Erneuter Abruf der Entity ... Patch in BLL?
-            await _applicationManagerService.UpdateApplicationManager(key, currentApplicationManager);
+                return new BadRequestWithModelErrorResult(modelValidationException.ModelErrors);
+            }
 
             return StatusCode(HttpStatusCode.NoContent);
         }
@@ -183,7 +166,7 @@ namespace SoftwareManager.WebApi.Controllers
         public async Task<IHttpActionResult> Delete([FromODataUri] int key, ODataQueryOptions<ApplicationManager> options)
         {
             if (options.IfMatch == null
-               || !options.IfMatch.ApplyTo(_applicationManagerService.FindApplicationManager(key)).Any())
+               || !options.IfMatch.ApplyTo(_applicationManagerService.FindApplicationManager(f => f.Id == key)).Any())
             {
                 return StatusCode(HttpStatusCode.PreconditionFailed);
             }
@@ -192,7 +175,7 @@ namespace SoftwareManager.WebApi.Controllers
             {
                 await _applicationManagerService.DeleteApplicationManager(key);
             }
-            catch (EntityNotFoundException)
+            catch (ItemNotFoundException)
             {
                 return NotFound();
             }

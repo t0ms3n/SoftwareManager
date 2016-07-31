@@ -1,24 +1,21 @@
-﻿
-using System;
-using System.Collections.Generic;
-using System.Data.Entity;
-using System.Linq;
+﻿using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
 using System.Web.OData;
 using System.Web.OData.Query;
 using System.Web.OData.Routing;
 using SoftwareManager.BLL.Exceptions;
-using SoftwareManager.BLL.Services;
-using SoftwareManager.Entities;
-using Mapster;
+using SoftwareManager.BLL.Contracts.Models;
+using SoftwareManager.BLL.Contracts.Services;
+using SoftwareManager.WebApi.Extensions;
+using SoftwareManager.WebApi.Helpers;
+using SoftwareManager.WebApi.HttpActionResults;
 
 namespace SoftwareManager.WebApi.Controllers
 {
     [ODataRoutePrefix("ApplicationVersions")]
-    public class ApplicationVersionsController : ODataController
+    public class ApplicationVersionsController : ODataBaseController
     {
         private readonly IApplicationVersionService _applicationVersionService;
 
@@ -30,70 +27,48 @@ namespace SoftwareManager.WebApi.Controllers
         [HttpGet]
         [EnableQuery]
         [ODataRoute("")]
-        public IQueryable<ApplicationVersion> GetApplicationVersions()
+        public IHttpActionResult GetApplicationVersions(ODataQueryOptions<ApplicationVersion> queryOptions)
         {
-            return _applicationVersionService.FindApplicationVersions();
+            string[] membersToExpand = ODataQueryOptionsExtractor.GetNavigationPropertiesToExpand(queryOptions.SelectExpand);
+            var query = _applicationVersionService.FindApplicationVersions(membersToExpand);
+            return Ok(query);
         }
 
         [HttpGet]
         [EnableQuery(AllowedQueryOptions = AllowedQueryOptions.Select | AllowedQueryOptions.Expand)]
         [ODataRoute("({key})")]
-        public IHttpActionResult GetApplicationVersion([FromODataUri] int key)
+        public IHttpActionResult GetApplicationVersion([FromODataUri] int key, ODataQueryOptions<ApplicationVersion> queryOptions)
         {
-            var applicationVersion = _applicationVersionService.FindApplicationVersion(key);
+            var applicationVersion = _applicationVersionService.FindApplicationVersion(f => f.Id == key);
 
             if (!applicationVersion.Any())
             {
                 return NotFound();
             }
 
-            return Ok(SingleResult.Create(applicationVersion));
+            string[] membersToExpand = ODataQueryOptionsExtractor.GetNavigationPropertiesToExpand(queryOptions.SelectExpand);
+            var query = _applicationVersionService.FindApplicationVersion(f => f.Id == key, membersToExpand);
+
+            return Ok(SingleResult.Create(query));
         }
 
         [HttpGet]
         [ODataRoute("({key})/id")]
-        [ODataRoute("({key})/application")]
+        [ODataRoute("({key})/versionNumber")]
+        [ODataRoute("({key})/applicationId")]
         public IHttpActionResult GetApplicationVersionProperty([FromODataUri] int key)
         {
-            var applicationVersion = _applicationVersionService.FindApplicationVersion(key).FirstOrDefault();
-
-            if (applicationVersion == null)
-            {
-                return NotFound();
-            }
-
-            var propertyToGet = Url.Request.RequestUri.Segments.Last();
-
-            if (!applicationVersion.HasProperty(propertyToGet))
-            {
-                return NotFound();
-            }
-
-            var propertyValue = applicationVersion.GetValue(propertyToGet);
-
-            if (propertyValue == null)
-            {
-                return StatusCode(System.Net.HttpStatusCode.NoContent);
-            }
-
-            return this.CreateOkHttpActionResult(propertyValue);
+            var applicationVersion = _applicationVersionService.FindApplicationVersion(q => q.Id == key).FirstOrDefault();
+            return GetObjectProperty(applicationVersion);
         }
 
         [HttpGet]
         //[ODataRoute("Set({key})/Collection")]
         public IHttpActionResult GetApplicationVersionCollection([FromODataUri] int key)
         {
-            var collectionToGet = Url.Request.RequestUri.Segments.Last();
-
-            var applicationVersion = _applicationVersionService.FindApplicationVersions(collectionToGet).FirstOrDefault(w => w.Id == key);
-
-            if (applicationVersion == null)
-            {
-                return NotFound();
-            }
-
-            var collectionPropertyValue = applicationVersion.GetValue(collectionToGet);
-            return this.CreateOkHttpActionResult(collectionPropertyValue);
+            var collectionToGet = Url.Request.RequestUri.Segments.Last().FirstLetterToUpper();
+            var applicationVersion = _applicationVersionService.FindApplicationVersions(f => f.Id == key, collectionToGet).FirstOrDefault();
+            return GetObjectCollection(applicationVersion, collectionToGet);
         }
 
         [HttpPost]
@@ -104,32 +79,40 @@ namespace SoftwareManager.WebApi.Controllers
                 return BadRequest(ModelState);
             }
 
-            await _applicationVersionService.CreateApplicationVersion(applicationVersion);
+            try
+            {
+                await _applicationVersionService.CreateApplicationVersion(applicationVersion);
+            }
+            catch (ModelValidationException modelValidationException)
+            {
+
+                return new BadRequestWithModelErrorResult(modelValidationException.ModelErrors);
+            }
 
             return Created(applicationVersion);
         }
 
 
-        public async Task<IHttpActionResult> Put([FromODataUri] int key, ApplicationVersion applicationVersion)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
+        //public async Task<IHttpActionResult> Put([FromODataUri] int key, ApplicationVersion applicationVersion)
+        //{
+        //    if (!ModelState.IsValid)
+        //    {
+        //        return BadRequest(ModelState);
+        //    }
 
-            try
-            {
-                await _applicationVersionService.UpdateApplicationVersion(key, applicationVersion);
-            }
-            catch (EntityNotFoundException)
-            {
-                return NotFound();
-            }
+        //    try
+        //    {
+        //        await _applicationVersionService.UpdateApplicationVersion(key, applicationVersion);
+        //    }
+        //    catch (EntityNotFoundException)
+        //    {
+        //        return NotFound();
+        //    }
 
-            return StatusCode(HttpStatusCode.NoContent);
-        }
+        //    return StatusCode(HttpStatusCode.NoContent);
+        //}
 
-        public async Task<IHttpActionResult> Patch([FromODataUri] int key, Delta<ApplicationVersion> applicationVersion)
+        public async Task<IHttpActionResult> Patch([FromODataUri] int key, Delta<ApplicationVersion> applicationVersion, ODataQueryOptions<ApplicationVersion> options)
         {
             if (!ModelState.IsValid)
             {
@@ -142,9 +125,25 @@ namespace SoftwareManager.WebApi.Controllers
                 return NotFound();
             }
 
-            // applicationVersion.Patch(currentApplicationVersion);
-            // Erneuter Abruf der Entity ... Patch in BLL?
-            await _applicationVersionService.UpdateApplicationVersion(key, currentApplicationVersion);
+            if (options.IfMatch == null
+               || !options.IfMatch.ApplyTo(_applicationVersionService.FindApplicationVersion(f => f.Id == key)).Any())
+            {
+                return StatusCode(HttpStatusCode.PreconditionFailed);
+            }
+
+            //Pass Delta to BLL and patch there?
+            applicationVersion.Patch(currentApplicationVersion);
+
+            try
+            {
+                // Update
+                await _applicationVersionService.UpdateApplicationVersion(key, currentApplicationVersion);
+            }
+            catch (ModelValidationException modelValidationException)
+            {
+
+                return new BadRequestWithModelErrorResult(modelValidationException.ModelErrors);
+            }
 
             return StatusCode(HttpStatusCode.NoContent);
         }
@@ -155,7 +154,7 @@ namespace SoftwareManager.WebApi.Controllers
             {
                 await _applicationVersionService.DeleteApplicationVersion(key);
             }
-            catch (EntityNotFoundException)
+            catch (ItemNotFoundException)
             {
                 return NotFound();
             }

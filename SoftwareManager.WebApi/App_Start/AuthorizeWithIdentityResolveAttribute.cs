@@ -1,22 +1,12 @@
 using System;
-using System.Linq;
-using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Security.Claims;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Web;
 using System.Web.Http;
 using System.Web.Http.Controllers;
-using System.Web.OData.Builder;
-using System.Web.OData.Extensions;
+using SoftwareManager.BLL.Contracts.Services;
 using SoftwareManager.BLL.Services;
-using SoftwareManager.Entities;
-using SoftwareManager.WebApi.Controllers;
-using SoftwareManager.WebApi.Services;
-using Microsoft.OData.Edm;
-using Microsoft.Practices.Unity;
-using Unity.WebApi;
 
 namespace SoftwareManager.WebApi
 {
@@ -50,21 +40,19 @@ namespace SoftwareManager.WebApi
         {
             try
             {
-                if (identityService != null && !identityService.IsAuthenticated)
+                if (identityService != null)
                 {
                     identityService.CurrentUser =
                         Task.Run(async () => await identityService.Authenticate(loginName)).Result;
                     return identityService.IsAuthenticated;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 //Log unauthorized
+                Debug.WriteLine($"Exception during authentication of {loginName}: {ex.Message}");
             }
             return false;
         }
     }
-
-
-
 }

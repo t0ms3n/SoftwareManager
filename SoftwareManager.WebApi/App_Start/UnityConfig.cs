@@ -4,7 +4,6 @@ using System.Xml.Schema;
 using SoftwareManager.BLL.Services;
 using SoftwareManager.Common.DependencyInjection;
 using SoftwareManager.WebApi.Controllers;
-using SoftwareManager.WebApi.Services;
 using Unity.WebApi;
 
 namespace SoftwareManager.WebApi
